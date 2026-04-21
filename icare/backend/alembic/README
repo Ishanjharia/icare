@@ -1,0 +1,4 @@
+Run from `icare/backend` (with `.env` present):
+
+  alembic revision --autogenerate -m "init"
+  alembic upgrade head

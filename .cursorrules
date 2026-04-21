@@ -1,0 +1,157 @@
+You are an expert Python and React developer helping build I-CARE — a privacy-first,
+offline-capable, AI-powered remote healthcare system for rural India.
+
+## Project identity
+- Name: I-CARE (IoT-Oriented Cloud-Based AI-Assisted Remote Healthcare System)
+- Student project by Ishan Bhushan Jharia, MITS Gwalior (Enrollment: 0901IO231025)
+- Evolved from a prior project called Arogyamitra (Streamlit-based multilingual health app)
+
+## Absolute rules — never break these
+- NEVER use Streamlit — frontend is React + Tailwind, backend is FastAPI
+- NEVER use cloud AI APIs (OpenAI, Gemini, Anthropic API) — all AI runs locally via Ollama
+- NEVER use Google Fit API — it is deprecated. Use Health Connect API only
+- NEVER store health data on any external server — everything stays local
+- NEVER put all logic in one file — always use the service module pattern
+- NEVER use sync functions where async is needed — FastAPI is fully async
+- ALWAYS use Python type hints
+- ALWAYS handle errors with proper try/except and return typed responses
+- ALWAYS write code that works offline — no feature should require internet except SMS alerts
+
+## Tech stack (locked — do not suggest alternatives)
+Backend:
+  - FastAPI (Python 3.11+) with uvicorn
+  - SQLite via SQLAlchemy (async) for user data, records, appointments
+  - InfluxDB client for vitals time-series data
+  - WebSockets via FastAPI for real-time vitals streaming
+  - MQTT via paho-mqtt for IoT device communication
+  - JWT authentication via python-jose + passlib[bcrypt]
+  - faster-whisper for Speech-to-Text (CUDA on RTX 4060)
+  - Coqui TTS for Text-to-Speech (offline, Hindi primary)
+  - silero-vad for Voice Activity Detection
+  - ollama Python client for LLM inference (BioMistral / Llama 3.2)
+  - bleak for direct BLE wearable communication
+  - paho-mqtt for MQTT IoT protocol
+  - fast2sms HTTP API for SMS alerts (India)
+  - fpdf2 for PDF generation
+  - python-jose[cryptography] for JWT
+
+Frontend:
+  - React 18 + TypeScript
+  - Tailwind CSS for styling
+  - Recharts for real-time vitals charts
+  - WebSocket native API for live data
+  - Axios for REST API calls
+
+## Project folder structure (enforce strictly)
+icare/
+├── backend/
+│   ├── main.py                    # FastAPI app entry point
+│   ├── config.py                  # All config/env vars
+│   ├── database.py                # SQLAlchemy setup
+│   ├── models/
+│   │   ├── user.py
+│   │   ├── health_record.py
+│   │   ├── prescription.py
+│   │   ├── appointment.py
+│   │   ├── medication.py
+│   │   ├── alert.py
+│   │   └── vitals_queue.py
+│   ├── schemas/
+│   │   ├── user.py
+│   │   ├── health_record.py
+│   │   ├── vitals.py
+│   │   └── alert.py
+│   ├── services/
+│   │   ├── auth_service.py        # JWT auth (ported from Arogyamitra)
+│   │   ├── vitals_service.py      # IoT ingestion + InfluxDB
+│   │   ├── ai_service.py          # All Ollama/LLM calls
+│   │   ├── voice_service.py       # Whisper STT + Coqui TTS + VAD
+│   │   ├── alert_service.py       # Threshold monitoring + Fast2SMS
+│   │   ├── records_service.py     # Health records + PDF generation
+│   │   └── sync_service.py        # Offline queue management
+│   ├── routers/
+│   │   ├── auth.py
+│   │   ├── vitals.py
+│   │   ├── symptoms.py
+│   │   ├── chat.py
+│   │   ├── voice.py
+│   │   ├── records.py
+│   │   ├── prescriptions.py
+│   │   ├── appointments.py
+│   │   ├── medications.py
+│   │   ├── alerts.py
+│   │   └── hospitals.py
+│   ├── translations.py            # Ported from Arogyamitra — all 10 languages
+│   └── utils/
+│       ├── pdf_generator.py
+│       └── sms_sender.py
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── vitals/
+│   │   │   ├── voice/
+│   │   │   ├── symptoms/
+│   │   │   ├── shared/
+│   │   │   └── alerts/
+│   │   ├── pages/
+│   │   ├── hooks/
+│   │   ├── services/
+│   │   └── types/
+└── iot/
+    ├── ble_scanner.py
+    ├── health_connect_bridge.py
+    └── mqtt_publisher.py
+
+## Service module pattern (always follow this)
+Each service file exports a class with async methods.
+Services never import from routers. Routers import from services only.
+Example:
+  class AuthService:
+      async def create_user(self, data: UserCreate) -> UserResponse: ...
+      async def authenticate(self, email: str, password: str) -> TokenResponse: ...
+
+## Vitals thresholds (default, patient-configurable)
+Heart rate: warn >100, alert >130, critical >180, warn <50, critical <40
+SpO2: warn <94%, critical <88%
+Systolic BP: warn >140, critical >180, warn <90, critical <80
+Diastolic BP: warn >90, critical >120, warn <60, critical <50
+
+## Alert escalation levels
+Level 1: In-app notification (immediate)
+Level 2: In-app red alert + unacknowledged for 60s
+Level 3: Fast2SMS to patient (unacknowledged for 120s)
+Level 4: Fast2SMS to caregiver (unacknowledged for 180s)
+Level 5: Critical — immediate SMS to all contacts + show emergency button
+
+## AI model usage
+Primary (health queries, symptom analysis): BioMistral via Ollama
+  model name: "biomistral" or "medllama2"
+Fallback / translation / intent: Llama 3.2 via Ollama
+  model name: "llama3.2"
+Always stream responses when possible.
+Always include confidence check — if response contains uncertainty markers, add escalation note.
+
+## Voice pipeline
+STT: faster-whisper model="small" device="cuda" (RTX 4060)
+VAD: silero-vad — detect speech start/end, no manual button needed
+TTS: Coqui TTS — offline Hindi model primary, gTTS fallback when online
+Intent classification: Llama 3.2 — classify as navigation/health_query/emergency
+Emergency keywords: ["मदद", "help", "emergency", "bachao", "बचाओ"] — bypass all pipeline
+
+## Languages supported
+Hindi, English, Marathi, Tamil, Telugu, Bengali, Gujarati, Kannada, Malayalam, Punjabi
+Language code mapping same as Arogyamitra's translations.py
+
+## Key patterns from Arogyamitra to preserve
+- Multi-role system: Patient / Doctor / Caregiver
+- get_text(key, language) function for all UI strings
+- Health profile with: blood_type, height, weight, allergies, chronic_conditions, medications
+- WhatsApp share URL generation
+- Emergency contacts: ambulance=102, police=100, emergency=112
+
+## What NOT to port from Arogyamitra
+- Streamlit UI code (app.py) — do not port, rebuild in React
+- Flat JSON file storage — use SQLite + InfluxDB instead
+- gTTS-only TTS — replace with Coqui + gTTS fallback
+- Raw Llama 3 — replace with BioMistral
+- Google Fit API — replace with Health Connect API

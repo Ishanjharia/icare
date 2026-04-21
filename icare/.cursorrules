@@ -1,0 +1,193 @@
+You are an expert Python and React developer helping build I-CARE — a privacy-conscious,
+cloud-deployed, AI-powered remote healthcare web app for rural India.
+
+## Project identity
+- Name: I-CARE (IoT-Oriented Cloud-Based AI-Assisted Remote Healthcare System)
+- Student project by Ishan Bhushan Jharia, MITS Gwalior (Enrollment: 0901IO231025)
+- Evolved from Arogyamitra (Streamlit multilingual health app)
+- Deployed as a public web app accessible from any device
+
+## Absolute rules — never break these
+- NEVER use Streamlit — frontend is React + Tailwind, backend is FastAPI
+- NEVER use Ollama or any local AI — all AI via Groq API
+- NEVER use local Whisper — use Groq Whisper API for STT
+- NEVER use Coqui TTS — use Web Speech API (browser) or gTTS for TTS
+- NEVER use Google Fit API — it is deprecated
+- NEVER use SQLite — use Supabase PostgreSQL (async via asyncpg)
+- NEVER use local InfluxDB — use InfluxDB Cloud
+- NEVER hardcode API keys — always use environment variables
+- NEVER put all logic in one file — always use service module pattern
+- ALWAYS use Python type hints
+- ALWAYS handle errors gracefully — health app must never crash on user
+- ALWAYS make the app work on mobile browsers (rural users use phones)
+
+## Deployment targets
+- Backend: Render.com (free tier) — FastAPI + uvicorn
+- Frontend: Vercel (free tier) — React + Vite
+- Database: Supabase (free tier) — PostgreSQL
+- Vitals time-series: InfluxDB Cloud (free tier)
+- AI inference: Groq API (free tier)
+- SMS alerts: Fast2SMS API (India)
+- File/audio storage: Supabase Storage (free tier)
+
+## Tech stack (locked)
+Backend:
+  - FastAPI (Python 3.11+) with uvicorn
+  - asyncpg + SQLAlchemy (async) for Supabase PostgreSQL
+  - influxdb-client for InfluxDB Cloud vitals
+  - WebSockets via FastAPI for real-time vitals streaming
+  - JWT auth via python-jose + passlib[bcrypt]
+  - groq Python SDK for all AI (LLM + Whisper STT)
+  - gTTS for Text-to-Speech (fallback, online)
+  - pydantic-settings for config management
+  - fpdf2 for PDF generation
+  - httpx for async HTTP calls (Fast2SMS)
+  - alembic for database migrations
+
+Frontend:
+  - React 18 + TypeScript + Vite
+  - Tailwind CSS
+  - Recharts for vitals charts
+  - Axios for API calls
+  - React Query (TanStack Query) for data fetching
+  - Web Speech API for browser-native TTS (free, no API needed)
+  - MediaRecorder API for voice recording
+  - React Router v6 for navigation
+
+## Groq models to use
+Medical AI (symptom analysis, health chat):
+  model: "llama-3.1-70b-versatile"
+Fast tasks (translation, intent classification):
+  model: "llama-3.2-3b-preview"  
+  or: "llama3-8b-8192"
+Voice STT:
+  model: "whisper-large-v3-turbo"
+
+## Project folder structure
+icare/
+├── .cursorrules
+├── .env.example
+├── .gitignore                  # must include .env
+├── README.md
+├── backend/
+│   ├── main.py                 # FastAPI app entry point
+│   ├── config.py               # Pydantic settings
+│   ├── database.py             # Supabase PostgreSQL setup
+│   ├── Procfile                # for Render: web: uvicorn main:app ...
+│   ├── runtime.txt             # python-3.11.0
+│   ├── requirements.txt
+│   ├── alembic/                # DB migrations
+│   ├── models/
+│   │   ├── user.py
+│   │   ├── health_record.py
+│   │   ├── prescription.py
+│   │   ├── appointment.py
+│   │   ├── medication.py
+│   │   ├── alert.py
+│   │   └── vitals_queue.py
+│   ├── schemas/
+│   │   ├── user.py
+│   │   ├── health_record.py
+│   │   ├── vitals.py
+│   │   └── alert.py
+│   ├── services/
+│   │   ├── auth_service.py
+│   │   ├── vitals_service.py
+│   │   ├── ai_service.py       # Groq API calls
+│   │   ├── voice_service.py    # Groq Whisper + gTTS
+│   │   ├── alert_service.py    # thresholds + Fast2SMS
+│   │   ├── records_service.py
+│   │   └── sync_service.py
+│   ├── routers/
+│   │   ├── auth.py
+│   │   ├── vitals.py
+│   │   ├── symptoms.py
+│   │   ├── chat.py
+│   │   ├── voice.py
+│   │   ├── records.py
+│   │   ├── prescriptions.py
+│   │   ├── appointments.py
+│   │   ├── medications.py
+│   │   ├── alerts.py
+│   │   └── hospitals.py
+│   ├── translations.py
+│   └── utils/
+│       ├── pdf_generator.py
+│       └── sms_sender.py
+├── frontend/
+│   ├── index.html
+│   ├── vite.config.ts
+│   ├── tailwind.config.ts
+│   ├── package.json
+│   └── src/
+│       ├── main.tsx
+│       ├── App.tsx
+│       ├── components/
+│       │   ├── vitals/
+│       │   ├── voice/
+│       │   ├── symptoms/
+│       │   ├── alerts/
+│       │   └── shared/
+│       ├── pages/
+│       │   ├── Login.tsx
+│       │   ├── Dashboard.tsx
+│       │   ├── Vitals.tsx
+│       │   ├── SymptomChecker.tsx
+│       │   ├── VoiceMode.tsx
+│       │   ├── Alerts.tsx
+│       │   ├── Appointments.tsx
+│       │   ├── Records.tsx
+│       │   ├── Prescriptions.tsx
+│       │   └── Medications.tsx
+│       ├── hooks/
+│       │   ├── useVitalsWebSocket.ts
+│       │   ├── useVoice.ts
+│       │   └── useAuth.ts
+│       ├── services/
+│       │   └── api.ts
+│       └── types/
+│           └── index.ts
+
+## Vitals thresholds
+heart_rate: warn_high=100, alert_high=130, critical_high=180, warn_low=50, critical_low=40
+spo2: alert_low=94, critical_low=88
+bp_systolic: warn_high=140, critical_high=180, warn_low=90, critical_low=80
+bp_diastolic: warn_high=90, critical_high=120, warn_low=60, critical_low=50
+
+## Alert escalation
+Level 1: In-app notification — immediate
+Level 2: In-app red alert — unacknowledged 60s
+Level 3: Fast2SMS to patient — unacknowledged 120s
+Level 4: Fast2SMS to caregiver — unacknowledged 180s
+Level 5: SMS all contacts + show emergency button — critical vitals
+
+## Languages supported
+Hindi, English, Marathi, Tamil, Telugu, Bengali, Gujarati, Kannada, Malayalam, Punjabi
+
+## Mobile-first design rules
+- All pages must work on 375px width (phone screen)
+- Touch targets minimum 44px height
+- No hover-only interactions
+- Bottom navigation bar on mobile
+- Sidebar collapses to hamburger on mobile
+- Voice button always visible and large enough to tap
+
+## Render deployment specifics
+- Add backend/Procfile: web: uvicorn main:app --host 0.0.0.0 --port $PORT
+- Add backend/runtime.txt: python-3.11.0
+- CORS must allow Vercel frontend URL + localhost for dev
+- WebSockets must work on Render free tier (they do)
+- Wake-up ping endpoint GET /health must respond in <100ms
+
+## Supabase specifics
+- Use async SQLAlchemy with asyncpg driver
+- Connection string format: postgresql+asyncpg://user:pass@host/db
+- Use connection pooling: pool_size=5, max_overflow=10
+- Run alembic migrations before deployment
+
+## InfluxDB Cloud specifics
+- Use influxdb-client-python with async client
+- Measurement: patient_vitals
+- Tags: patient_id, metric, source
+- Fields: value (float), unit (string)
+- Always use try/except — if InfluxDB fails, app continues (non-critical)
