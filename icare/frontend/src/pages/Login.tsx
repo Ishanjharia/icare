@@ -22,7 +22,12 @@ export function Login() {
       await login(email.trim(), password);
       navigate(from, { replace: true });
     } catch {
-      setError("Invalid email or password.");
+      const api = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+      if (import.meta.env.PROD && !api) {
+        setError("This deployment is missing VITE_API_URL (set it in Vercel to your API origin).");
+      } else {
+        setError("Invalid email or password, or the API could not be reached.");
+      }
     } finally {
       setBusy(false);
     }
@@ -82,6 +87,11 @@ export function Login() {
             Create an account
           </Link>
         </p>
+        {import.meta.env.PROD && !(import.meta.env.VITE_API_URL as string | undefined)?.trim() ? (
+          <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-center text-xs text-amber-900 ring-1 ring-amber-200">
+            Configure <strong className="font-mono">VITE_API_URL</strong> in Vercel (your Render API base URL, no trailing slash).
+          </p>
+        ) : null}
       </div>
     </div>
   );

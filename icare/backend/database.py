@@ -8,12 +8,63 @@ from sqlalchemy.orm import DeclarativeBase
 from config import settings
 
 
+def _require_database_url() -> str:
+    raw = (settings.DATABASE_URL or "").strip()
+    if not raw:
+        raise RuntimeError(
+            "DATABASE_URL is not set. Use postgresql+asyncpg://USER:PASSWORD@HOST:PORT/DB "
+            "and URL-encode special characters in the password (e.g. @ → %40, [ → %5B, ] → %5D)."
+        )
+    return raw
+
+
+def normalize_database_url_for_asyncpg(url: str) -> str:
+    """
+    Ensure SQLAlchemy uses the asyncpg async driver (postgresql+asyncpg://).
+
+    Accepts common variants (postgresql://, postgres://, postgresql+psycopg2://, …)
+    and rewrites them to postgresql+asyncpg://. Other schemes (e.g. sqlite) are unchanged.
+    """
+    u = url.strip()
+    if u.startswith("postgresql+asyncpg://"):
+        return u
+    if "://" not in u:
+        return f"postgresql+asyncpg://{u}"
+    scheme, _, remainder = u.partition("://")
+    if not remainder:
+        return u
+    lower = scheme.lower()
+    if lower in ("postgres", "postgresql") or lower.startswith("postgresql+"):
+        return f"postgresql+asyncpg://{remainder}"
+    return u
+
+
+def ensure_asyncpg_ssl_query(url: str) -> str:
+    """Append ssl=require for Supabase / common cloud hosts if not already set (asyncpg + TLS)."""
+    u = url.strip()
+    if not u.startswith("postgresql+asyncpg://"):
+        return u
+    lower = u.lower()
+    if "ssl=" in lower or "sslmode=" in lower:
+        return u
+    if "supabase.co" in lower or "supabase.com" in lower or ".pooler.supabase.com" in lower:
+        joiner = "&" if "?" in u else "?"
+        return f"{u}{joiner}ssl=require"
+    return u
+
+
+_ASYNC_DATABASE_URL = ensure_asyncpg_ssl_query(
+    normalize_database_url_for_asyncpg(_require_database_url()),
+)
+
+
 class Base(DeclarativeBase):
     """Declarative base for ORM models."""
 
 
+# postgresql+asyncpg:// in the URL selects the asyncpg driver (see normalize_database_url_for_asyncpg).
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    _ASYNC_DATABASE_URL,
     echo=False,
     future=True,
     pool_size=5,

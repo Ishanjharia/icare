@@ -1,6 +1,7 @@
 """FastAPI application entry point for I-CARE API (cloud skeleton)."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -26,15 +27,36 @@ from services.vitals_ws_manager import VitalsConnectionManager
 
 vitals_ws_manager = VitalsConnectionManager()
 
-app = FastAPI(title="I-CARE API", version="1.0.0")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def _cors_allow_origins() -> list[str]:
+    """Build explicit CORS origin list from FRONTEND_URL (comma-separated) plus local dev defaults."""
+    raw = [o.strip() for o in settings.FRONTEND_URL.split(",") if o.strip()]
+    for extra in ("http://localhost:5173", "http://localhost:3000"):
+        if extra not in raw:
+            raw.append(extra)
+    return raw
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: DB bootstrap on startup."""
+    await init_db()
+    yield
+
+
+app = FastAPI(title="I-CARE API", version="1.0.0", lifespan=lifespan)
+
+_cors_kw: dict = {
+    "allow_origins": _cors_allow_origins(),
+    "allow_credentials": True,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+}
+_rx = (settings.CORS_ORIGIN_REGEX or "").strip()
+if _rx:
+    _cors_kw["allow_origin_regex"] = _rx
+
+app.add_middleware(CORSMiddleware, **_cors_kw)
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(vitals.router, prefix="/api/vitals", tags=["vitals"])
@@ -47,12 +69,6 @@ app.include_router(appointments.router, prefix="/api/appointments", tags=["appoi
 app.include_router(medications.router, prefix="/api/medications", tags=["medications"])
 app.include_router(alerts.router, prefix="/api/alerts", tags=["alerts"])
 app.include_router(hospitals.router, prefix="/api/hospitals", tags=["hospitals"])
-
-
-@app.on_event("startup")
-async def on_startup() -> None:
-    """Initialize database tables on application startup."""
-    await init_db()
 
 
 @app.get("/health")

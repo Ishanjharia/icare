@@ -9,6 +9,19 @@ Copy `icare/.env.example` to `icare/backend/.env`, fill secrets, then implement 
 
 See `icare/.cursorrules` for architecture rules and folder layout.
 
+## Deploy: Render (API) + Vercel (frontend)
+
+**Backend (Render)**  
+- Root directory: `icare/backend` (or repo root with start command `cd icare/backend && uvicorn main:app --host 0.0.0.0 --port $PORT`).  
+- Set **`DATABASE_URL`** to `postgresql+asyncpg://…` (or `postgresql://…`; the app normalizes to asyncpg). **URL-encode** characters in the password (`@` → `%40`, `[` → `%5B`, `]` → `%5D`). Supabase gets **`?ssl=require`** appended automatically when the host matches Supabase.  
+- Set **`SECRET_KEY`**, **`DATABASE_URL`**, **`FRONTEND_URL`** (your Vercel URL(s), comma-separated). Optional: **`GROQ_*`**, **`INFLUXDB_*`**, **`FAST2SMS_API_KEY`** (defaults allow the process to boot; AI/SMS routes need real keys).  
+- **`CORS_ORIGIN_REGEX`**: default in `config.py` allows Vercel preview hosts; set in `.env` to override or disable (empty string).
+
+**Frontend (Vercel)**  
+- Root directory: `icare/frontend`. Build: `npm run build`, output: **`dist`**.  
+- Set **`VITE_API_URL`** to your Render API base (e.g. `https://your-api.onrender.com`) **with no trailing slash**. Without this, the SPA cannot reach `/api/auth/login` from the browser.  
+- `vercel.json` rewrites client routes to `index.html` for React Router.
+
 ## Demo: vitals simulator & alerts
 
 Wearable data is ingested over HTTPS (`POST /api/vitals/ingest`). For demos without a physical device:

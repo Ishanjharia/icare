@@ -16,5 +16,4 @@ httpx
 gtts
 python-dotenv
 websockets
-psycopg2-binary
 asyncpg

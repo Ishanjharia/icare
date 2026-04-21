@@ -11,7 +11,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from config import settings
-from database import Base
+from database import Base, normalize_database_url_for_asyncpg
 
 # Import models so metadata is populated for autogenerate.
 from models import alert  # noqa: F401
@@ -21,6 +21,7 @@ from models import health_record  # noqa: F401
 from models import medication  # noqa: F401
 from models import patient_vitals_threshold  # noqa: F401
 from models import prescription  # noqa: F401
+from models import saved_hospital  # noqa: F401
 from models import user  # noqa: F401
 from models import vitals_queue  # noqa: F401
 
@@ -29,7 +30,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", normalize_database_url_for_asyncpg(settings.DATABASE_URL))
 
 target_metadata = Base.metadata
 
@@ -57,7 +58,7 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode using async engine."""
     section = dict(config.get_section(config.config_ini_section) or {})
-    section["sqlalchemy.url"] = settings.DATABASE_URL
+    section["sqlalchemy.url"] = normalize_database_url_for_asyncpg(settings.DATABASE_URL)
     connectable = async_engine_from_config(
         section,
         prefix="sqlalchemy.",
