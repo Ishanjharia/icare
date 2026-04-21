@@ -1,53 +1,82 @@
-You are an expert Python and React developer helping build I-CARE — a privacy-first,
-offline-capable, AI-powered remote healthcare system for rural India.
+You are an expert Python and React developer helping build I-CARE — a privacy-conscious,
+cloud-deployed, AI-powered remote healthcare web app for rural India.
 
 ## Project identity
 - Name: I-CARE (IoT-Oriented Cloud-Based AI-Assisted Remote Healthcare System)
 - Student project by Ishan Bhushan Jharia, MITS Gwalior (Enrollment: 0901IO231025)
-- Evolved from a prior project called Arogyamitra (Streamlit-based multilingual health app)
+- Evolved from Arogyamitra (Streamlit multilingual health app)
+- Deployed as a public web app accessible from any device
 
 ## Absolute rules — never break these
 - NEVER use Streamlit — frontend is React + Tailwind, backend is FastAPI
-- NEVER use cloud AI APIs (OpenAI, Gemini, Anthropic API) — all AI runs locally via Ollama
-- NEVER use Google Fit API — it is deprecated. Use Health Connect API only
-- NEVER store health data on any external server — everything stays local
-- NEVER put all logic in one file — always use the service module pattern
-- NEVER use sync functions where async is needed — FastAPI is fully async
+- NEVER use Ollama or any local AI — all AI via Groq API
+- NEVER use local Whisper — use Groq Whisper API for STT
+- NEVER use Coqui TTS — use Web Speech API (browser) or gTTS for TTS
+- NEVER use Google Fit API — it is deprecated
+- NEVER use SQLite — use Supabase PostgreSQL (async via asyncpg)
+- NEVER use local InfluxDB — use InfluxDB Cloud
+- NEVER hardcode API keys — always use environment variables
+- NEVER put all logic in one file — always use service module pattern
 - ALWAYS use Python type hints
-- ALWAYS handle errors with proper try/except and return typed responses
-- ALWAYS write code that works offline — no feature should require internet except SMS alerts
+- ALWAYS handle errors gracefully — health app must never crash on user
+- ALWAYS make the app work on mobile browsers (rural users use phones)
 
-## Tech stack (locked — do not suggest alternatives)
+## Deployment targets
+- Backend: Render.com (free tier) — FastAPI + uvicorn
+- Frontend: Vercel (free tier) — React + Vite
+- Database: Supabase (free tier) — PostgreSQL
+- Vitals time-series: InfluxDB Cloud (free tier)
+- AI inference: Groq API (free tier)
+- SMS alerts: Fast2SMS API (India)
+- File/audio storage: Supabase Storage (free tier)
+
+## Tech stack (locked)
 Backend:
   - FastAPI (Python 3.11+) with uvicorn
-  - SQLite via SQLAlchemy (async) for user data, records, appointments
-  - InfluxDB client for vitals time-series data
+  - asyncpg + SQLAlchemy (async) for Supabase PostgreSQL
+  - influxdb-client for InfluxDB Cloud vitals
   - WebSockets via FastAPI for real-time vitals streaming
-  - MQTT via paho-mqtt for IoT device communication
-  - JWT authentication via python-jose + passlib[bcrypt]
-  - faster-whisper for Speech-to-Text (CUDA on RTX 4060)
-  - Coqui TTS for Text-to-Speech (offline, Hindi primary)
-  - silero-vad for Voice Activity Detection
-  - ollama Python client for LLM inference (BioMistral / Llama 3.2)
-  - bleak for direct BLE wearable communication
-  - paho-mqtt for MQTT IoT protocol
-  - fast2sms HTTP API for SMS alerts (India)
+  - JWT auth via python-jose + passlib[bcrypt]
+  - groq Python SDK for all AI (LLM + Whisper STT)
+  - gTTS for Text-to-Speech (fallback, online)
+  - pydantic-settings for config management
   - fpdf2 for PDF generation
-  - python-jose[cryptography] for JWT
+  - httpx for async HTTP calls (Fast2SMS)
+  - alembic for database migrations
 
 Frontend:
-  - React 18 + TypeScript
-  - Tailwind CSS for styling
-  - Recharts for real-time vitals charts
-  - WebSocket native API for live data
-  - Axios for REST API calls
+  - React 18 + TypeScript + Vite
+  - Tailwind CSS
+  - Recharts for vitals charts
+  - Axios for API calls
+  - React Query (TanStack Query) for data fetching
+  - Web Speech API for browser-native TTS (free, no API needed)
+  - MediaRecorder API for voice recording
+  - React Router v6 for navigation
 
-## Project folder structure (enforce strictly)
+## Groq models to use
+Medical AI (symptom analysis, health chat):
+  model: "llama-3.1-70b-versatile"
+Fast tasks (translation, intent classification):
+  model: "llama-3.2-3b-preview"  
+  or: "llama3-8b-8192"
+Voice STT:
+  model: "whisper-large-v3-turbo"
+
+## Project folder structure
 icare/
+├── .cursorrules
+├── .env.example
+├── .gitignore                  # must include .env
+├── README.md
 ├── backend/
-│   ├── main.py                    # FastAPI app entry point
-│   ├── config.py                  # All config/env vars
-│   ├── database.py                # SQLAlchemy setup
+│   ├── main.py                 # FastAPI app entry point
+│   ├── config.py               # Pydantic settings
+│   ├── database.py             # Supabase PostgreSQL setup
+│   ├── Procfile                # for Render: web: uvicorn main:app ...
+│   ├── runtime.txt             # python-3.11.0
+│   ├── requirements.txt
+│   ├── alembic/                # DB migrations
 │   ├── models/
 │   │   ├── user.py
 │   │   ├── health_record.py
@@ -62,13 +91,13 @@ icare/
 │   │   ├── vitals.py
 │   │   └── alert.py
 │   ├── services/
-│   │   ├── auth_service.py        # JWT auth (ported from Arogyamitra)
-│   │   ├── vitals_service.py      # IoT ingestion + InfluxDB
-│   │   ├── ai_service.py          # All Ollama/LLM calls
-│   │   ├── voice_service.py       # Whisper STT + Coqui TTS + VAD
-│   │   ├── alert_service.py       # Threshold monitoring + Fast2SMS
-│   │   ├── records_service.py     # Health records + PDF generation
-│   │   └── sync_service.py        # Offline queue management
+│   │   ├── auth_service.py
+│   │   ├── vitals_service.py
+│   │   ├── ai_service.py       # Groq API calls
+│   │   ├── voice_service.py    # Groq Whisper + gTTS
+│   │   ├── alert_service.py    # thresholds + Fast2SMS
+│   │   ├── records_service.py
+│   │   └── sync_service.py
 │   ├── routers/
 │   │   ├── auth.py
 │   │   ├── vitals.py
@@ -81,77 +110,84 @@ icare/
 │   │   ├── medications.py
 │   │   ├── alerts.py
 │   │   └── hospitals.py
-│   ├── translations.py            # Ported from Arogyamitra — all 10 languages
+│   ├── translations.py
 │   └── utils/
 │       ├── pdf_generator.py
 │       └── sms_sender.py
 ├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── vitals/
-│   │   │   ├── voice/
-│   │   │   ├── symptoms/
-│   │   │   ├── shared/
-│   │   │   └── alerts/
-│   │   ├── pages/
-│   │   ├── hooks/
-│   │   ├── services/
-│   │   └── types/
-└── iot/
-    ├── ble_scanner.py
-    ├── health_connect_bridge.py
-    └── mqtt_publisher.py
+│   ├── index.html
+│   ├── vite.config.ts
+│   ├── tailwind.config.ts
+│   ├── package.json
+│   └── src/
+│       ├── main.tsx
+│       ├── App.tsx
+│       ├── components/
+│       │   ├── vitals/
+│       │   ├── voice/
+│       │   ├── symptoms/
+│       │   ├── alerts/
+│       │   └── shared/
+│       ├── pages/
+│       │   ├── Login.tsx
+│       │   ├── Dashboard.tsx
+│       │   ├── Vitals.tsx
+│       │   ├── SymptomChecker.tsx
+│       │   ├── VoiceMode.tsx
+│       │   ├── Alerts.tsx
+│       │   ├── Appointments.tsx
+│       │   ├── Records.tsx
+│       │   ├── Prescriptions.tsx
+│       │   └── Medications.tsx
+│       ├── hooks/
+│       │   ├── useVitalsWebSocket.ts
+│       │   ├── useVoice.ts
+│       │   └── useAuth.ts
+│       ├── services/
+│       │   └── api.ts
+│       └── types/
+│           └── index.ts
 
-## Service module pattern (always follow this)
-Each service file exports a class with async methods.
-Services never import from routers. Routers import from services only.
-Example:
-  class AuthService:
-      async def create_user(self, data: UserCreate) -> UserResponse: ...
-      async def authenticate(self, email: str, password: str) -> TokenResponse: ...
+## Vitals thresholds
+heart_rate: warn_high=100, alert_high=130, critical_high=180, warn_low=50, critical_low=40
+spo2: alert_low=94, critical_low=88
+bp_systolic: warn_high=140, critical_high=180, warn_low=90, critical_low=80
+bp_diastolic: warn_high=90, critical_high=120, warn_low=60, critical_low=50
 
-## Vitals thresholds (default, patient-configurable)
-Heart rate: warn >100, alert >130, critical >180, warn <50, critical <40
-SpO2: warn <94%, critical <88%
-Systolic BP: warn >140, critical >180, warn <90, critical <80
-Diastolic BP: warn >90, critical >120, warn <60, critical <50
-
-## Alert escalation levels
-Level 1: In-app notification (immediate)
-Level 2: In-app red alert + unacknowledged for 60s
-Level 3: Fast2SMS to patient (unacknowledged for 120s)
-Level 4: Fast2SMS to caregiver (unacknowledged for 180s)
-Level 5: Critical — immediate SMS to all contacts + show emergency button
-
-## AI model usage
-Primary (health queries, symptom analysis): BioMistral via Ollama
-  model name: "biomistral" or "medllama2"
-Fallback / translation / intent: Llama 3.2 via Ollama
-  model name: "llama3.2"
-Always stream responses when possible.
-Always include confidence check — if response contains uncertainty markers, add escalation note.
-
-## Voice pipeline
-STT: faster-whisper model="small" device="cuda" (RTX 4060)
-VAD: silero-vad — detect speech start/end, no manual button needed
-TTS: Coqui TTS — offline Hindi model primary, gTTS fallback when online
-Intent classification: Llama 3.2 — classify as navigation/health_query/emergency
-Emergency keywords: ["मदद", "help", "emergency", "bachao", "बचाओ"] — bypass all pipeline
+## Alert escalation
+Level 1: In-app notification — immediate
+Level 2: In-app red alert — unacknowledged 60s
+Level 3: Fast2SMS to patient — unacknowledged 120s
+Level 4: Fast2SMS to caregiver — unacknowledged 180s
+Level 5: SMS all contacts + show emergency button — critical vitals
 
 ## Languages supported
 Hindi, English, Marathi, Tamil, Telugu, Bengali, Gujarati, Kannada, Malayalam, Punjabi
-Language code mapping same as Arogyamitra's translations.py
 
-## Key patterns from Arogyamitra to preserve
-- Multi-role system: Patient / Doctor / Caregiver
-- get_text(key, language) function for all UI strings
-- Health profile with: blood_type, height, weight, allergies, chronic_conditions, medications
-- WhatsApp share URL generation
-- Emergency contacts: ambulance=102, police=100, emergency=112
+## Mobile-first design rules
+- All pages must work on 375px width (phone screen)
+- Touch targets minimum 44px height
+- No hover-only interactions
+- Bottom navigation bar on mobile
+- Sidebar collapses to hamburger on mobile
+- Voice button always visible and large enough to tap
 
-## What NOT to port from Arogyamitra
-- Streamlit UI code (app.py) — do not port, rebuild in React
-- Flat JSON file storage — use SQLite + InfluxDB instead
-- gTTS-only TTS — replace with Coqui + gTTS fallback
-- Raw Llama 3 — replace with BioMistral
-- Google Fit API — replace with Health Connect API
+## Render deployment specifics
+- Add backend/Procfile: web: uvicorn main:app --host 0.0.0.0 --port $PORT
+- Add backend/runtime.txt: python-3.11.0
+- CORS must allow Vercel frontend URL + localhost for dev
+- WebSockets must work on Render free tier (they do)
+- Wake-up ping endpoint GET /health must respond in <100ms
+
+## Supabase specifics
+- Use async SQLAlchemy with asyncpg driver
+- Connection string format: postgresql+asyncpg://user:pass@host/db
+- Use connection pooling: pool_size=5, max_overflow=10
+- Run alembic migrations before deployment
+
+## InfluxDB Cloud specifics
+- Use influxdb-client-python with async client
+- Measurement: patient_vitals
+- Tags: patient_id, metric, source
+- Fields: value (float), unit (string)
+- Always use try/except — if InfluxDB fails, app continues (non-critical)
