@@ -8,7 +8,7 @@ import { Alerts } from "./pages/Alerts";
 import { Appointments } from "./pages/Appointments";
 import { Dashboard } from "./pages/Dashboard";
 import { Login } from "./pages/Login";
-import { Register } from "./pages/Register";
+import Register from "./pages/Register";
 import { Medications } from "./pages/Medications";
 import { Prescriptions } from "./pages/Prescriptions";
 import { Records } from "./pages/Records";

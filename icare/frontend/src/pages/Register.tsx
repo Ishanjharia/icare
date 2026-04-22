@@ -1,153 +1,201 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth";
-import { Logo } from "../components/ui/Logo";
-import type { UserRole } from "../services/api";
+import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import type { AxiosError } from "axios";
+import { api, setStoredToken, type TokenResponse } from "../services/api";
 
-const LANGUAGES = [
-  { code: "English", label: "English" },
-  { code: "Hindi", label: "हिन्दी (Hindi)" },
-  { code: "Marathi", label: "मराठी (Marathi)" },
-  { code: "Tamil", label: "தமிழ் (Tamil)" },
-  { code: "Telugu", label: "తెలుగు (Telugu)" },
-  { code: "Bengali", label: "বাংলা (Bengali)" },
-  { code: "Gujarati", label: "ગુજરાતી (Gujarati)" },
-  { code: "Kannada", label: "ಕನ್ನಡ (Kannada)" },
-  { code: "Malayalam", label: "മലയാളം (Malayalam)" },
-  { code: "Punjabi", label: "ਪੰਜਾਬੀ (Punjabi)" },
-] as const;
+export default function Register() {
+  const [role, setRole] = useState("patient");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-export function Register() {
-  const { register } = useAuth();
-  const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("patient");
-  const [language, setLanguage] = useState<string>("English");
-  const [phone, setPhone] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const onSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError(null);
-    setBusy(true);
+    setLoading(true);
+    setError("");
+
+    const formData = new FormData(e.currentTarget);
+    const name = String(formData.get("name") ?? "").trim();
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
+    const data = {
+      name,
+      email,
+      password,
+      role,
+      language: "English",
+      phone: "",
+    };
+
     try {
-      await register({
-        name: name.trim(),
-        email: email.trim(),
-        password,
-        role,
-        language,
-        phone: phone.trim() || null,
-      });
-      navigate("/", { replace: true });
-    } catch {
-      setError("Could not register. Try a different email.");
+      await api.post("/api/auth/register", data);
+      const loginRes = await api.post<TokenResponse>("/api/auth/login", { email, password });
+      if (loginRes.data.access_token) {
+        setStoredToken(loginRes.data.access_token);
+        window.location.assign("/dashboard");
+      } else {
+        setError("Registration failed");
+      }
+    } catch (err) {
+      const ax = err as AxiosError<{ detail?: string }>;
+      const detail = ax.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : "Cannot connect to server. Try again.");
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#F9FAFB] px-4 py-10">
-      <div className="w-full max-w-md rounded-2xl border border-gray-100 bg-white p-8 shadow-card">
-        <div className="flex justify-center">
-          <Logo />
-        </div>
-        <h1 className="mt-6 text-center text-xl font-semibold text-gray-900">Create account</h1>
-        <p className="mt-1 text-center text-sm text-gray-600">Choose your role and preferred language.</p>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#f0fdf4",
+      }}
+    >
+      <div
+        style={{
+          background: "white",
+          padding: "2rem",
+          borderRadius: "12px",
+          width: "100%",
+          maxWidth: "400px",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+        }}
+      >
+        <h1 style={{ textAlign: "center", color: "#1D9E75", marginBottom: "0.5rem" }}>I-CARE</h1>
+        <h2 style={{ textAlign: "center", marginBottom: "1.5rem", fontWeight: "normal" }}>Create Account</h2>
 
-        <form className="mt-8 space-y-4" onSubmit={onSubmit}>
-          <div>
-            <label className="text-sm font-medium text-gray-700">Full name</label>
+        {error && (
+          <div
+            style={{
+              background: "#fee2e2",
+              color: "#dc2626",
+              padding: "0.75rem",
+              borderRadius: "8px",
+              marginBottom: "1rem",
+              fontSize: "14px",
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Full Name</label>
             <input
+              name="name"
               required
-              className="mt-1 w-full min-h-11 rounded-lg border border-gray-200 px-3 text-base outline-none ring-teal-400 focus:ring-2"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              placeholder="Your name"
+              style={{
+                width: "100%",
+                padding: "10px",
+                border: "1px solid #ddd",
+                borderRadius: "8px",
+                fontSize: "16px",
+                boxSizing: "border-box",
+              }}
             />
           </div>
-          <div>
-            <label className="text-sm font-medium text-gray-700">Email</label>
+
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Email</label>
             <input
+              name="email"
               type="email"
               required
-              className="mt-1 w-full min-h-11 rounded-lg border border-gray-200 px-3 text-base outline-none ring-teal-400 focus:ring-2"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              style={{
+                width: "100%",
+                padding: "10px",
+                border: "1px solid #ddd",
+                borderRadius: "8px",
+                fontSize: "16px",
+                boxSizing: "border-box",
+              }}
             />
           </div>
-          <div>
-            <label className="text-sm font-medium text-gray-700">Password</label>
+
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Password</label>
             <input
+              name="password"
               type="password"
               required
+              placeholder="Min 6 characters"
               minLength={6}
-              className="mt-1 w-full min-h-11 rounded-lg border border-gray-200 px-3 text-base outline-none ring-teal-400 focus:ring-2"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px",
+                border: "1px solid #ddd",
+                borderRadius: "8px",
+                fontSize: "16px",
+                boxSizing: "border-box",
+              }}
             />
           </div>
-          <div>
-            <span className="text-sm font-medium text-gray-700">Role</span>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {(["patient", "doctor"] as const).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setRole(r)}
-                  className={`min-h-11 rounded-xl border px-3 text-sm font-semibold capitalize transition-colors ${
-                    role === r
-                      ? "border-teal-400 bg-teal-50 text-teal-800"
-                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
+
+          <div style={{ marginBottom: "1.5rem" }}>
+            <label style={{ display: "block", marginBottom: "8px", fontSize: "14px" }}>I am a:</label>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={() => setRole("patient")}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  background: role === "patient" ? "#1D9E75" : "white",
+                  color: role === "patient" ? "white" : "#333",
+                  border: "1px solid #1D9E75",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontSize: "16px",
+                }}
+              >
+                Patient
+              </button>
+              <button
+                type="button"
+                onClick={() => setRole("doctor")}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  background: role === "doctor" ? "#1D9E75" : "white",
+                  color: role === "doctor" ? "white" : "#333",
+                  border: "1px solid #1D9E75",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontSize: "16px",
+                }}
+              >
+                Doctor
+              </button>
             </div>
           </div>
-          <div>
-            <label htmlFor="lang" className="text-sm font-medium text-gray-700">
-              Language
-            </label>
-            <select
-              id="lang"
-              className="mt-1 w-full min-h-11 rounded-lg border border-gray-200 bg-white px-3 text-base outline-none ring-teal-400 focus:ring-2"
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-            >
-              {LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-gray-700">Phone (optional)</label>
-            <input
-              type="tel"
-              className="mt-1 w-full min-h-11 rounded-lg border border-gray-200 px-3 text-base outline-none ring-teal-400 focus:ring-2"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-          </div>
-          {error ? <p className="text-sm text-danger-400">{error}</p> : null}
+
           <button
             type="submit"
-            disabled={busy}
-            className="w-full min-h-11 rounded-xl bg-teal-400 px-4 text-sm font-semibold text-white shadow-sm hover:bg-teal-600 disabled:opacity-60"
+            disabled={loading}
+            style={{
+              width: "100%",
+              padding: "12px",
+              background: loading ? "#9ca3af" : "#1D9E75",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontSize: "16px",
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
           >
-            {busy ? "Creating…" : "Register"}
+            {loading ? "Creating account..." : "Register"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-600">
+        <p style={{ textAlign: "center", marginTop: "1rem", fontSize: "14px" }}>
           Already have an account?{" "}
-          <Link to="/login" className="font-semibold text-teal-600 hover:text-teal-800">
+          <Link to="/login" style={{ color: "#1D9E75", fontWeight: 600, textDecoration: "none" }}>
             Sign in
           </Link>
         </p>
