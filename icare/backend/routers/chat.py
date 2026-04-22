@@ -117,6 +117,9 @@ async def chat_stream_get(
             pass
     history_norm = _normalize_history(hist_raw)
 
+    if async_session_factory is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database is not configured")
+
     async with async_session_factory() as db:
         user = await AuthService().get_current_user(db, token)
         target = _resolve_chat_patient(user, patient_id)

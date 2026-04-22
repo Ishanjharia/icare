@@ -1,7 +1,7 @@
 """FastAPI application entry point for I-CARE API (cloud skeleton)."""
 
 import asyncio
-from contextlib import asynccontextmanager
+import traceback
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -37,18 +37,7 @@ def _cors_allow_origins() -> list[str]:
     return raw
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifespan: DB bootstrap on startup."""
-    try:
-        await init_db()
-        print("✅ Database connected")
-    except Exception as e:
-        print(f"❌ Database error: {e}")
-    yield
-
-
-app = FastAPI(title="I-CARE API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="I-CARE API", version="1.0.0")
 
 _cors_kw: dict = {
     "allow_origins": _cors_allow_origins(),
@@ -75,13 +64,27 @@ app.include_router(alerts.router, prefix="/api/alerts", tags=["alerts"])
 app.include_router(hospitals.router, prefix="/api/hospitals", tags=["hospitals"])
 
 
+@app.on_event("startup")
+async def startup() -> None:
+    from database import engine as _db_engine
+
+    if _db_engine is None:
+        print(
+            "Database failed: DATABASE_URL is not set or empty. "
+            "Set DATABASE_URL in Render → Environment (Supabase connection string; URL-encode special characters in the password)."
+        )
+        return
+    try:
+        await init_db()
+        print("Database connected")
+    except Exception as e:
+        print(f"Database failed: {e!r}")
+        traceback.print_exc()
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
-    """Wake-up / liveness ping."""
-    return {
-        "status": "ok",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
+    return {"status": "ok"}
 
 
 @app.websocket("/ws/vitals/{patient_id}")

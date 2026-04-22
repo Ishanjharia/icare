@@ -1,28 +1,19 @@
-"""Async SQLAlchemy engine and session (Supabase PostgreSQL via asyncpg).
+"""Async SQLAlchemy engine and session (PostgreSQL via asyncpg; Supabase Transaction pooler).
 
-Supabase Transaction pooler: disable asyncpg statement caching and SQLAlchemy's
-asyncpg prepared-statement cache, or you can see "prepared statement does not exist"
-when connections move between pooler backends. ``statement_cache_size=0`` is passed
-to asyncpg via ``connect_args``; ``prepared_statement_cache_size=0`` is a
-SQLAlchemy dialect option on ``create_async_engine`` (not an asyncpg connect kwarg).
+``statement_cache_size=0`` and ``prepared_statement_cache_size=0`` (the latter is consumed by
+SQLAlchemy's asyncpg layer, not passed through to ``asyncpg.connect``) avoid pooler
+"prepared statement does not exist" errors.
 """
+
+from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from config import settings
-
-
-def _require_database_url() -> str:
-    raw = (settings.DATABASE_URL or "").strip()
-    if not raw:
-        raise RuntimeError(
-            "DATABASE_URL is not set. Use postgresql+asyncpg://USER:PASSWORD@HOST:PORT/DB "
-            "and URL-encode special characters in the password (e.g. @ → %40, [ → %5B, ] → %5D)."
-        )
-    return raw
 
 
 def normalize_database_url_for_asyncpg(url: str) -> str:
@@ -60,61 +51,67 @@ def ensure_asyncpg_ssl_query(url: str) -> str:
     return u
 
 
-_ASYNC_DATABASE_URL = ensure_asyncpg_ssl_query(
-    normalize_database_url_for_asyncpg(_require_database_url()),
-)
+def resolve_async_database_url() -> str | None:
+    """Build asyncpg URL from ``settings.DATABASE_URL`` (from env ``DATABASE_URL``)."""
+    raw = (settings.DATABASE_URL or "").strip()
+    if not raw:
+        return None
+    return ensure_asyncpg_ssl_query(normalize_database_url_for_asyncpg(raw))
+
+
+def _connect_args_for_url(url: str) -> dict:
+    """Pooler-safe caches; TLS for remote hosts (Render → Supabase), not typical local Postgres."""
+    args: dict = {
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    }
+    lower = url.lower()
+    if "localhost" in lower or "127.0.0.1" in lower:
+        return args
+    args["ssl"] = "require"
+    return args
+
+
+_RESOLVED_URL = resolve_async_database_url()
+
+if _RESOLVED_URL is None:
+    engine = None
+    async_session_factory = None
+else:
+    engine = create_async_engine(
+        _RESOLVED_URL,
+        echo=False,
+        pool_pre_ping=True,
+        connect_args=_connect_args_for_url(_RESOLVED_URL),
+    )
+    async_session_factory = async_sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
 
 
 class Base(DeclarativeBase):
     """Declarative base for ORM models."""
 
 
-def _asyncpg_connect_args(url: str) -> dict:
-    """asyncpg options; SSL required for Supabase pooler / TLS hosts, optional for local Postgres."""
-    lower = url.lower()
-    need_ssl = (
-        "supabase.co" in lower
-        or "supabase.com" in lower
-        or ".pooler.supabase.com" in lower
-        or "ssl=require" in lower
-        or "sslmode=require" in lower
-    )
-    args: dict = {"statement_cache_size": 0}
-    if need_ssl:
-        args["ssl"] = "require"
-    return args
-
-
-# postgresql+asyncpg:// in the URL selects the asyncpg driver (see normalize_database_url_for_asyncpg).
-engine = create_async_engine(
-    _ASYNC_DATABASE_URL,
-    echo=False,
-    future=True,
-    pool_size=3,
-    max_overflow=5,
-    pool_recycle=300,
-    pool_pre_ping=True,
-    prepared_statement_cache_size=0,
-    connect_args=_asyncpg_connect_args(_ASYNC_DATABASE_URL),
-)
-
-async_session_factory = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
-
-
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency yielding an async database session."""
+    if async_session_factory is None:
+        raise HTTPException(status_code=503, detail="Database is not configured")
     async with async_session_factory() as session:
         yield session
 
 
 async def init_db() -> None:
     """Import models and create all tables (development bootstrap; prefer Alembic in prod)."""
+    if engine is None:
+        raise RuntimeError(
+            "DATABASE_URL is not set or empty. Set the DATABASE_URL environment variable on Render "
+            "(e.g. postgresql+asyncpg://… from Supabase; URL-encode special characters in the password)."
+        )
     from models import (  # noqa: F401
         alert,
         appointment,

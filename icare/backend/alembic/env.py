@@ -30,7 +30,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", normalize_database_url_for_asyncpg(settings.DATABASE_URL))
+_db_url = (settings.DATABASE_URL or "").strip()
+if not _db_url:
+    raise RuntimeError("DATABASE_URL is not set. Export DATABASE_URL before running Alembic.")
+config.set_main_option("sqlalchemy.url", normalize_database_url_for_asyncpg(_db_url))
 
 target_metadata = Base.metadata
 
@@ -58,7 +61,7 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode using async engine."""
     section = dict(config.get_section(config.config_ini_section) or {})
-    section["sqlalchemy.url"] = normalize_database_url_for_asyncpg(settings.DATABASE_URL)
+    section["sqlalchemy.url"] = normalize_database_url_for_asyncpg(_db_url)
     connectable = async_engine_from_config(
         section,
         prefix="sqlalchemy.",

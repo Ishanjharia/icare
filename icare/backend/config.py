@@ -15,9 +15,10 @@ class Settings(BaseSettings):
     GROQ_FAST_MODEL: str = "llama-3.2-3b-preview"
     GROQ_WHISPER_MODEL: str = "whisper-large-v3-turbo"
 
-    # Supabase PostgreSQL (async). Prefer postgresql+asyncpg://…; `database.py` rewrites other postgres URLs to asyncpg.
+    # Supabase PostgreSQL (async). Read from env ``DATABASE_URL`` (case-insensitive on typical installs).
+    # Default empty so the process can boot for ``/health`` even if the var is missing on Render; DB routes return 503 until set.
     DATABASE_URL: str = Field(
-        ...,
+        default="",
         description="postgresql+asyncpg://user:password@host:port/db — URL-encode special chars in password (@ %40, [ %5B, ] %5D).",
     )
 
