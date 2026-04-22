@@ -12,8 +12,8 @@ See `icare/.cursorrules` for architecture rules and folder layout.
 ## Deploy: Render (API) + Vercel (frontend)
 
 **Backend (Render)**  
-- Root directory: `icare/backend` (or repo root with start command `cd icare/backend && uvicorn main:app --host 0.0.0.0 --port $PORT`).  
-- Set **`DATABASE_URL`** to `postgresql+asyncpg://…` (or `postgresql://…`; the app normalizes to asyncpg). **URL-encode** characters in the password (`@` → `%40`, `[` → `%5B`, `]` → `%5D`). Supabase gets **`?ssl=require`** appended automatically when the host matches Supabase.  
+- Root directory: `icare/backend`. The **`Procfile`** starts **`uvicorn` only** (no `alembic upgrade head` on boot — that was exiting with status 1 when `DATABASE_URL` was missing or unreachable). If you use PostgreSQL again, run migrations once from a shell or a one-off job: `alembic upgrade head`.  
+- Optional: set **`DATABASE_URL`** for DB-backed routes (`postgresql+asyncpg://…` or `postgresql://…`). **URL-encode** special characters in the password (`@` → `%40`, `[` → `%5B`, `]` → `%5D`).  
 - Set **`SECRET_KEY`**, **`DATABASE_URL`**, **`FRONTEND_URL`** (your Vercel URL(s), comma-separated). Optional: **`GROQ_*`**, **`INFLUXDB_*`**, **`FAST2SMS_API_KEY`** (defaults allow the process to boot; AI/SMS routes need real keys).  
 - **`CORS_ORIGIN_REGEX`**: default in `config.py` allows Vercel preview hosts; set in `.env` to override or disable (empty string).
 
