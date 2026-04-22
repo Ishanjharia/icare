@@ -1,65 +1,76 @@
-"""Authentication routes."""
+"""Simple file-backed auth (no DB, no JWT — Bearer token is the user email)."""
+
+from datetime import datetime, timezone
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel
 
-from database import get_db
 from deps.auth import get_current_user
-from schemas.health_profile import HealthProfileResponse, HealthProfileUpdate
-from schemas.user import TokenResponse, UserCreate, UserLogin, UserResponse, UserUpdate
-from services.auth_service import AuthService
+from schemas.user import TokenResponse, UserResponse, UserRole
+from simple_auth_store import hash_password, load_users, record_to_user_response, save_users
 
 router = APIRouter()
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)) -> UserResponse:
-    """Create a new account."""
+class RegisterData(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str = "patient"
+    language: str = "English"
+    phone: str = ""
+
+
+class LoginData(BaseModel):
+    email: str
+    password: str
+
+
+def _normalize_role(role: str) -> UserRole:
     try:
-        return await AuthService().create_user(db, payload)
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Registration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        return UserRole(str(role).strip().lower())
+    except ValueError:
+        return UserRole.patient
+
+
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def register(data: RegisterData) -> UserResponse:
+    users = load_users()
+    email = str(data.email).strip().lower()
+    if email in users:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists")
+    role = _normalize_role(data.role)
+    uid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    phone = (data.phone or "").strip()
+    users[email] = {
+        "name": data.name.strip(),
+        "email": email,
+        "password": hash_password(data.password),
+        "role": role.value,
+        "language": data.language.strip() or "English",
+        "phone": phone,
+        "id": uid,
+        "created_at": now,
+    }
+    save_users(users)
+    return record_to_user_response(users[email])
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> TokenResponse:
-    """Issue a JWT (default expiry from ACCESS_TOKEN_EXPIRE_MINUTES, e.g. 24h)."""
-    return await AuthService().authenticate(db, str(payload.email), payload.password)
+async def login(data: LoginData) -> TokenResponse:
+    users = load_users()
+    email = str(data.email).strip().lower()
+    if email not in users:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    rec = users[email]
+    if rec["password"] != hash_password(data.password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Wrong password")
+    user = record_to_user_response(rec)
+    return TokenResponse(access_token=email, token_type="bearer", user=user)
 
 
 @router.get("/me", response_model=UserResponse)
 async def read_me(current: UserResponse = Depends(get_current_user)) -> UserResponse:
-    """Return the authenticated user's profile."""
     return current
-
-
-@router.put("/me", response_model=UserResponse)
-async def update_me(
-    payload: UserUpdate,
-    db: AsyncSession = Depends(get_db),
-    current: UserResponse = Depends(get_current_user),
-) -> UserResponse:
-    """Update profile fields for the authenticated user."""
-    return await AuthService().update_user(db, current.id, payload)
-
-
-@router.get("/profile", response_model=HealthProfileResponse)
-async def get_profile(
-    db: AsyncSession = Depends(get_db),
-    current: UserResponse = Depends(get_current_user),
-) -> HealthProfileResponse:
-    """Return the authenticated user's health profile."""
-    return await AuthService().get_health_profile(db, current.id)
-
-
-@router.put("/profile", response_model=HealthProfileResponse)
-async def update_profile(
-    payload: HealthProfileUpdate,
-    db: AsyncSession = Depends(get_db),
-    current: UserResponse = Depends(get_current_user),
-) -> HealthProfileResponse:
-    """Update the authenticated user's health profile."""
-    return await AuthService().update_health_profile(db, current.id, payload)

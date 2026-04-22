@@ -21,6 +21,9 @@ dist/
 *.db
 *.sqlite
 
+# Simple file auth (hashed passwords)
+icare/backend/users.json
+
 # OS files
 .DS_Store
 Thumbs.db

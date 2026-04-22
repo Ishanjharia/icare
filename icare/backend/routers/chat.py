@@ -16,8 +16,8 @@ from deps.auth import get_current_user
 from schemas.chat import ChatMessageRequest
 from schemas.user import UserResponse, UserRole
 from services.ai_service import get_ai_service
-from services.auth_service import AuthService
 from services.records_service import get_records_service
+from simple_auth_store import user_for_email_token
 
 router = APIRouter()
 
@@ -120,8 +120,11 @@ async def chat_stream_get(
     if async_session_factory is None:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database is not configured")
 
+    user = user_for_email_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or unknown token")
+
     async with async_session_factory() as db:
-        user = await AuthService().get_current_user(db, token)
         target = _resolve_chat_patient(user, patient_id)
         ctx = await get_records_service(db).get_health_context_for_ai(db, target)
         profile = ctx.get("profile") or {}
