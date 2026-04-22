@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import async_session_factory
+from database import async_session_factory, get_db
 from deps.auth import get_current_user
 from schemas.chat import ChatMessageRequest
 from schemas.user import UserResponse, UserRole
