@@ -1,7 +1,6 @@
 """FastAPI application entry point for I-CARE API (cloud skeleton)."""
 
 import asyncio
-import os
 import traceback
 from datetime import datetime, timezone
 
@@ -29,19 +28,13 @@ vitals_ws_manager = VitalsConnectionManager()
 
 app = FastAPI(title="I-CARE API", version="1.0.0")
 
-_cors_origins: list[str] = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "https://icare-djt988p95-ishanjharia63527-6426s-projects.vercel.app",
-    "https://icare-flax.vercel.app",
-]
-for _part in (p.strip() for p in os.getenv("FRONTEND_URL", "").split(",") if p.strip()):
-    if _part not in _cors_origins:
-        _cors_origins.append(_part)
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
