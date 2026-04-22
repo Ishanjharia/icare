@@ -1,4 +1,11 @@
-"""Async SQLAlchemy engine and session (Supabase PostgreSQL via asyncpg)."""
+"""Async SQLAlchemy engine and session (Supabase PostgreSQL via asyncpg).
+
+Supabase Transaction pooler: disable asyncpg statement caching and SQLAlchemy's
+asyncpg prepared-statement cache, or you can see "prepared statement does not exist"
+when connections move between pooler backends. ``statement_cache_size=0`` is passed
+to asyncpg via ``connect_args``; ``prepared_statement_cache_size=0`` is a
+SQLAlchemy dialect option on ``create_async_engine`` (not an asyncpg connect kwarg).
+"""
 
 from collections.abc import AsyncGenerator
 
@@ -62,14 +69,33 @@ class Base(DeclarativeBase):
     """Declarative base for ORM models."""
 
 
+def _asyncpg_connect_args(url: str) -> dict:
+    """asyncpg options; SSL required for Supabase pooler / TLS hosts, optional for local Postgres."""
+    lower = url.lower()
+    need_ssl = (
+        "supabase.co" in lower
+        or "supabase.com" in lower
+        or ".pooler.supabase.com" in lower
+        or "ssl=require" in lower
+        or "sslmode=require" in lower
+    )
+    args: dict = {"statement_cache_size": 0}
+    if need_ssl:
+        args["ssl"] = "require"
+    return args
+
+
 # postgresql+asyncpg:// in the URL selects the asyncpg driver (see normalize_database_url_for_asyncpg).
 engine = create_async_engine(
     _ASYNC_DATABASE_URL,
     echo=False,
     future=True,
-    pool_size=5,
-    max_overflow=10,
+    pool_size=3,
+    max_overflow=5,
     pool_recycle=300,
+    pool_pre_ping=True,
+    prepared_statement_cache_size=0,
+    connect_args=_asyncpg_connect_args(_ASYNC_DATABASE_URL),
 )
 
 async_session_factory = async_sessionmaker(

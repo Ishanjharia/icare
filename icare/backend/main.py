@@ -40,7 +40,11 @@ def _cors_allow_origins() -> list[str]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: DB bootstrap on startup."""
-    await init_db()
+    try:
+        await init_db()
+        print("✅ Database connected")
+    except Exception as e:
+        print(f"❌ Database error: {e}")
     yield
 
 
