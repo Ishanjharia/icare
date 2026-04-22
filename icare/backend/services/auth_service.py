@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
@@ -56,11 +57,21 @@ class AuthService:
             phone=data.phone.strip() if data.phone else None,
         )
         db.add(user)
-        await db.flush()
-        profile = HealthProfile(user_id=user.id)
-        db.add(profile)
-        await db.commit()
-        await db.refresh(user)
+        try:
+            await db.flush()
+            profile = HealthProfile(user_id=user.id)
+            db.add(profile)
+            await db.commit()
+            await db.refresh(user)
+        except IntegrityError as exc:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
+            ) from exc
+        except Exception:
+            await db.rollback()
+            raise
         return UserResponse.model_validate(user)
 
     async def authenticate(self, db: AsyncSession, email: str, password: str) -> TokenResponse:

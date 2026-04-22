@@ -1,4 +1,4 @@
-"""FastAPI application entry point for I-CARE API (cloud skeleton)."""
+"""FastAPI application entry point for I-CARE API."""
 
 import asyncio
 import traceback
@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from config import settings
 from database import init_db
 from routers import (
     alerts,
@@ -28,10 +29,16 @@ vitals_ws_manager = VitalsConnectionManager()
 
 app = FastAPI(title="I-CARE API", version="1.0.0")
 
+
+def _cors_origins() -> list[str]:
+    return [origin.strip() for origin in settings.FRONTEND_URL.split(",") if origin.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=_cors_origins(),
+    allow_origin_regex=settings.CORS_ORIGIN_REGEX or None,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -54,17 +61,21 @@ async def startup() -> None:
     from database import engine as _db_engine
 
     if _db_engine is None:
-        print(
+        message = (
             "Database failed: DATABASE_URL is not set or empty. "
-            "Set DATABASE_URL in Render → Environment (Supabase connection string; URL-encode special characters in the password)."
+            "Set DATABASE_URL in Render environment with the Supabase connection string."
         )
+        print(message)
+        if settings.ENVIRONMENT.lower() != "development":
+            raise RuntimeError(message)
         return
     try:
         await init_db()
         print("Database connected")
-    except Exception as e:
-        print(f"Database failed: {e!r}")
+    except Exception as exc:
+        print(f"Database failed: {exc!r}")
         traceback.print_exc()
+        raise
 
 
 @app.get("/health")
@@ -93,5 +104,5 @@ async def websocket_vitals(websocket: WebSocket, patient_id: str) -> None:
 
 @app.websocket("/ws/voice/{patient_id}")
 async def websocket_voice(websocket: WebSocket, patient_id: str) -> None:
-    """Voice: binary audio chunks → Groq Whisper → intent JSON for browser TTS."""
+    """Voice: binary audio chunks -> Groq Whisper -> intent JSON for browser TTS."""
     await handle_voice_websocket(websocket, patient_id)
