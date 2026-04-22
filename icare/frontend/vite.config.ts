@@ -11,4 +11,17 @@ export default defineConfig({
       "/ws": { target: "ws://127.0.0.1:8000", ws: true, changeOrigin: true },
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom", "react-router-dom"],
+          charts: ["recharts"],
+          query: ["@tanstack/react-query"],
+          axios: ["axios"],
+        },
+      },
+    },
+  },
 });
