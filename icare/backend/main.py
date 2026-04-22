@@ -1,13 +1,13 @@
 """FastAPI application entry point for I-CARE API (cloud skeleton)."""
 
 import asyncio
+import os
 import traceback
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import settings
 from database import init_db
 from routers import (
     alerts,
@@ -27,29 +27,25 @@ from services.vitals_ws_manager import VitalsConnectionManager
 
 vitals_ws_manager = VitalsConnectionManager()
 
-
-def _cors_allow_origins() -> list[str]:
-    """Build explicit CORS origin list from FRONTEND_URL (comma-separated) plus local dev defaults."""
-    raw = [o.strip() for o in settings.FRONTEND_URL.split(",") if o.strip()]
-    for extra in ("http://localhost:5173", "http://localhost:3000"):
-        if extra not in raw:
-            raw.append(extra)
-    return raw
-
-
 app = FastAPI(title="I-CARE API", version="1.0.0")
 
-_cors_kw: dict = {
-    "allow_origins": _cors_allow_origins(),
-    "allow_credentials": True,
-    "allow_methods": ["*"],
-    "allow_headers": ["*"],
-}
-_rx = (settings.CORS_ORIGIN_REGEX or "").strip()
-if _rx:
-    _cors_kw["allow_origin_regex"] = _rx
+_cors_origins: list[str] = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://icare-djt988p95-ishanjharia63527-6426s-projects.vercel.app",
+    "https://icare-flax.vercel.app",
+]
+for _part in (p.strip() for p in os.getenv("FRONTEND_URL", "").split(",") if p.strip()):
+    if _part not in _cors_origins:
+        _cors_origins.append(_part)
 
-app.add_middleware(CORSMiddleware, **_cors_kw)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(vitals.router, prefix="/api/vitals", tags=["vitals"])

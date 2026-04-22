@@ -1,6 +1,6 @@
 """Authentication routes."""
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
@@ -15,7 +15,13 @@ router = APIRouter()
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)) -> UserResponse:
     """Create a new account."""
-    return await AuthService().create_user(db, payload)
+    try:
+        return await AuthService().create_user(db, payload)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Registration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/login", response_model=TokenResponse)
