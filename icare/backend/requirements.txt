@@ -16,4 +16,3 @@ httpx
 gtts
 python-dotenv
 websockets
-asyncpg

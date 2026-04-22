@@ -1,11 +1,13 @@
 """FastAPI application entry point for I-CARE API."""
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from database import init_db
 from routers import (
     alerts,
     appointments,
@@ -20,8 +22,11 @@ from routers import (
     voice,
 )
 from routers.voice import handle_voice_websocket
+from services.ai_service import get_ai_service
+from services.vitals_service import get_vitals_service
 from services.vitals_ws_manager import VitalsConnectionManager
 
+logger = logging.getLogger(__name__)
 vitals_ws_manager = VitalsConnectionManager()
 
 app = FastAPI(title="I-CARE API", version="1.0.0")
@@ -45,6 +50,28 @@ app.include_router(appointments.router, prefix="/api/appointments", tags=["appoi
 app.include_router(medications.router, prefix="/api/medications", tags=["medications"])
 app.include_router(alerts.router, prefix="/api/alerts", tags=["alerts"])
 app.include_router(hospitals.router, prefix="/api/hospitals", tags=["hospitals"])
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    """Try to initialize optional services, but never block app boot."""
+    try:
+        await init_db()
+        logger.info("Database initialized")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Database startup failed; continuing without database: %s", exc)
+
+    try:
+        get_vitals_service()
+        logger.info("InfluxDB service initialized")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("InfluxDB startup failed; continuing without InfluxDB: %s", exc)
+
+    try:
+        get_ai_service()
+        logger.info("Groq AI service initialized")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Groq startup failed; continuing without AI services: %s", exc)
 
 
 @app.get("/health")
